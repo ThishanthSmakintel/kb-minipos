@@ -44,6 +44,11 @@
             <p class="card-text text-primary fw-bold fs-4 mb-0 product-price">
               ${{ product.price ? product.price.toFixed(2) : "0.00" }}
             </p>
+            <p
+              class="card-text text-secondary fw-semibold fs-6 mb-0 product-stock"
+            >
+              Available Stock: {{ product.totalQuantityPurchased }}
+            </p>
           </div>
         </div>
       </div>
@@ -66,17 +71,12 @@ export default {
       this.$emit("add-to-cart", product);
     },
     onImageError(event) {
-      // When an image fails to load, replace it with a more specific placeholder
-      // or a generic one. You can also add product name to placeholder.
-      const productName = event.target.alt || "Product"; // Get product name from alt text
+      const productName = event.target.alt || "Product";
       event.target.src = `https://placehold.co/600x400?text=${encodeURIComponent(
         productName
       )}%0ANo+Image`;
-      // You could also add a class to style broken images differently
-      // event.target.classList.add('image-error');
     },
     encodeURIComponent(str) {
-      // Helper to ensure product names with special characters are properly encoded for URL
       return encodeURIComponent(str);
     },
   },
@@ -84,63 +84,93 @@ export default {
 </script>
 
 <style scoped>
+/* Product Card Styling */
 .product-card {
   cursor: pointer;
-  border-radius: 0.75rem;
-  transition: transform 0.25s ease-in-out, box-shadow 0.25s ease-in-out;
-  display: flex;
-  flex-direction: column;
+  border-radius: 1rem;
   overflow: hidden;
   background-color: #fff;
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
 }
 
 .product-card:hover,
 .product-card:focus-visible {
-  transform: translateY(-8px);
-  box-shadow: 0 1rem 2rem rgba(0, 0, 0, 0.15);
-  z-index: 5; /* Ensure it comes above other elements on hover if needed */
+  transform: translateY(-6px);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.12);
+  z-index: 10;
 }
 
 .product-card:active {
-  transform: translateY(-4px); /* Slightly less lift on active click */
-  box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.08);
 }
 
+/* Product Image Styling */
 .product-image {
   width: 100%;
-  height: 200px; /* Or use aspect-ratio css property for modern browsers */
-  /* aspect-ratio: 3 / 2; */
-  object-fit: cover; /* Or 'contain' if you don't want cropping */
-  border-bottom: 1px solid #ddd;
-  user-select: none; /* Prevent image selection */
-  background-color: #f8f9fa; /* Light background for images that might not fill */
+  height: 220px;
+  object-fit: cover;
+  border-bottom: 1px solid #eee;
+  background-color: #f0f2f5;
+  transition: filter 0.3s ease;
+  user-select: none;
 }
 
+.product-card:hover .product-image {
+  filter: brightness(0.95);
+}
+
+/* Card Body Enhancements */
 .card-body {
-  padding: 1rem 1.25rem;
-  display: flex; /* Already there, good */
-  flex-direction: column; /* Already there, good */
-  justify-content: center; /* Align items vertically if card-body is taller */
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  text-align: center;
+  gap: 0.75rem;
 }
 
+/* Product Name Typography */
 .product-name {
-  font-size: 1.1rem; /* Slightly larger for better readability */
+  font-size: 1.15rem;
   font-weight: 600;
-  min-height: 3.5em; /* Adjust if needed, aims for roughly 2-3 lines */
+  color: #1e1e1e;
+  min-height: 3em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   line-height: 1.3;
-  word-break: break-word; /* Handles long product names */
-  color: #333; /* Darker text for better contrast */
+  word-break: break-word;
 }
 
+/* Product Price */
 .product-price {
-  font-size: 1.3rem; /* Prominent price */
-  color: #007bff; /* Bootstrap primary blue, good for call to action */
-  margin-top: auto; /* Pushes price to the bottom if card-body has extra space */
+  font-size: 1.3rem;
   font-weight: 700;
+  color: #0d6efd;
+  margin-bottom: 0.25rem;
 }
 
-/* Optional: Style for images that failed to load and are using placeholder */
-/* .product-image.image-error { */
-/* Styles for images that couldn't load, e.g., different background */
-/* } */
+/* Stock Text */
+.product-stock {
+  font-size: 0.95rem;
+  color: #555;
+}
+
+/* Responsive Improvements */
+@media (max-width: 576px) {
+  .product-image {
+    height: 180px;
+  }
+
+  .product-name {
+    font-size: 1rem;
+  }
+
+  .product-price {
+    font-size: 1.1rem;
+  }
+}
 </style>
