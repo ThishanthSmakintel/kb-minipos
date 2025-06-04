@@ -1,6 +1,19 @@
 import { createStore } from "vuex";
 import axios from "axios";
 
+// Helper function to adjust stock in product lists
+function adjustStockInList(productList, productId, quantityChange) {
+  const product = productList.find((p) => String(p.id) === String(productId));
+  if (product && typeof product.availableStock === "number") {
+    // Ensure availableStock exists and is a number
+    product.availableStock += quantityChange;
+  } else if (product) {
+    // If product exists but availableStock is not a number, initialize or warn
+    // console.warn(`Product ${productId} availableStock is not a number, initializing.`);
+    // product.availableStock = 0 + quantityChange; // Or handle as an error
+  }
+}
+
 export default createStore({
   state() {
     return {
@@ -21,7 +34,7 @@ export default createStore({
     },
     ADD_TO_CART(state, productToAdd) {
       const existingItem = state.cart.find(
-        (item) => item.productId === productToAdd.id
+        (item) => String(item.productId) === String(productToAdd.id)
       );
       if (existingItem) {
         existingItem.quantity++;
@@ -31,46 +44,132 @@ export default createStore({
           name: productToAdd.name,
           price: parseFloat(productToAdd.price),
           quantity: 1,
-          // You might want to add imagePath here if needed directly in cart item
-          // imagePath: productToAdd.imagePath
         });
       }
+      adjustStockInList(state.allProductsList, productToAdd.id, -1);
+      adjustStockInList(state.displayedProducts, productToAdd.id, -1);
     },
     UPDATE_ITEM_QUANTITY(state, { productId, change }) {
       const itemInCart = state.cart.find(
-        (item) => item.productId === productId
+        (item) => String(item.productId) === String(productId)
       );
       if (itemInCart) {
         itemInCart.quantity += change;
+        adjustStockInList(state.allProductsList, productId, -change);
+        adjustStockInList(state.displayedProducts, productId, -change);
+
         if (itemInCart.quantity <= 0) {
           state.cart = state.cart.filter(
-            (item) => item.productId !== productId
+            (item) => String(item.productId) !== String(productId)
           );
         }
       }
     },
     REMOVE_ITEM_FROM_CART(state, productIdToRemove) {
-      state.cart = state.cart.filter(
-        (item) => item.productId !== productIdToRemove
+      const itemIndex = state.cart.findIndex(
+        (item) => String(item.productId) === String(productIdToRemove)
       );
+      if (itemIndex > -1) {
+        const removedItem = state.cart[itemIndex];
+        adjustStockInList(
+          state.allProductsList,
+          productIdToRemove,
+          removedItem.quantity
+        );
+        adjustStockInList(
+          state.displayedProducts,
+          productIdToRemove,
+          removedItem.quantity
+        );
+        state.cart.splice(itemIndex, 1);
+      }
     },
     CLEAR_CART(state) {
+      state.cart.forEach((cartItem) => {
+        adjustStockInList(
+          state.allProductsList,
+          cartItem.productId,
+          cartItem.quantity
+        );
+        adjustStockInList(
+          state.displayedProducts,
+          cartItem.productId,
+          cartItem.quantity
+        );
+      });
       state.cart = [];
     },
     SET_CATEGORIES(state, categoriesData) {
       state.categories = categoriesData;
     },
     SET_ALL_PRODUCTS_LIST(state, productsData) {
-      state.allProductsList = productsData;
+      state.allProductsList = productsData.map((p) => ({
+        ...p,
+        availableStock: parseInt(p.availableStock, 10) || 0,
+        initialStockForSession:
+          parseInt(p.initialStockForSession, 10) ||
+          parseInt(p.availableStock, 10) ||
+          0, // Ensure initialStockForSession is also set
+      }));
     },
     SET_DISPLAYED_PRODUCTS(state, productsData) {
-      state.displayedProducts = productsData;
+      state.displayedProducts = productsData.map((p) => ({
+        ...p,
+        availableStock: parseInt(p.availableStock, 10) || 0,
+        initialStockForSession:
+          parseInt(p.initialStockForSession, 10) ||
+          parseInt(p.availableStock, 10) ||
+          0, // Ensure initialStockForSession is also set
+      }));
     },
     CLEAR_DISPLAYED_PRODUCTS(state) {
       state.displayedProducts = [];
     },
     SET_PRODUCT_LOADING(state, isLoading) {
       state.isProductLoading = isLoading;
+    },
+    RECONCILE_STOCK_WITH_CART(state) {
+      if (!state.cart) return; // Guard against null cart
+
+      const cartQuantities = new Map();
+      state.cart.forEach((item) => {
+        cartQuantities.set(String(item.productId), item.quantity);
+      });
+
+      state.allProductsList.forEach((product) => {
+        const quantityInCart = cartQuantities.get(String(product.id)) || 0;
+        if (product.initialStockForSession !== undefined) {
+          product.availableStock =
+            product.initialStockForSession - quantityInCart;
+        }
+      });
+      // Refresh displayedProducts from the reconciled allProductsList
+      // This assumes displayedProducts should be a reflection or filtered version of allProductsList
+      // If a category filter was active, you might need to re-apply it here.
+      const currentCategoryFilterId =
+        state.displayedProducts.length > 0 &&
+        state.allProductsList.length !== state.displayedProducts.length
+          ? state.displayedProducts[0]?.category // A simple way to check if a filter might be active; needs robust category tracking if used
+          : null;
+
+      if (
+        currentCategoryFilterId &&
+        state.categories.some(
+          (c) => String(c.id) === String(currentCategoryFilterId)
+        )
+      ) {
+        state.displayedProducts = JSON.parse(
+          JSON.stringify(
+            state.allProductsList.filter(
+              (p) => String(p.category) === String(currentCategoryFilterId)
+            )
+          )
+        );
+      } else {
+        state.displayedProducts = JSON.parse(
+          JSON.stringify(state.allProductsList)
+        );
+      }
     },
   },
   actions: {
@@ -80,7 +179,13 @@ export default createStore({
     clearAmount({ commit }) {
       commit("setAmount", 0);
     },
+    async initializeStore({ dispatch }) {
+      await dispatch("loadCartFromLocalStorage");
+      await dispatch("fetchCategories");
+      await dispatch("fetchAllProducts");
+    },
     loadCartFromLocalStorage({ commit }) {
+      // Removed unused 'dispatch'
       const savedCart = localStorage.getItem("miniPosCart");
       if (savedCart) {
         commit("SET_CART", JSON.parse(savedCart));
@@ -107,7 +212,7 @@ export default createStore({
       dispatch("saveCartToLocalStorage");
     },
     async fetchCategories({ commit }) {
-      commit("SET_PRODUCT_LOADING", true); // Or a specific category loading flag
+      commit("SET_PRODUCT_LOADING", true);
       try {
         const token = sessionStorage.getItem("posToken");
         const response = await axios.post(
@@ -136,20 +241,16 @@ export default createStore({
         console.error("API error in fetchCategories:", error);
         commit("SET_CATEGORIES", []);
       }
-      // SET_PRODUCT_LOADING will be set to false by product fetching actions
+      // Note: SET_PRODUCT_LOADING is typically set to false in the action that fetches products
     },
     async fetchAllProducts({ commit }) {
+      // Removed unused 'state', 'dispatch' as RECONCILE is now a commit
       commit("SET_PRODUCT_LOADING", true);
       try {
-        // Retrieve token from session storage
         const token = sessionStorage.getItem("posToken");
-
-        // Make API call to fetch products
         const response = await axios.post(
           "http://demo.app.kenwynbooks.com/api/pos/products/get-all-products-stock-details.php",
-          {
-            customerId: "206",
-          },
+          { customerId: "206" },
           {
             headers: {
               Authorization: `Bearer ${token}`,
@@ -159,25 +260,22 @@ export default createStore({
           }
         );
 
-        // Check for successful response and presence of products array
         if (response.data?.code === 200 && response.data?.data?.products) {
-          // Map API fields to frontend product fields
           const formattedProducts = response.data.data.products.map((prod) => ({
             id: prod.productId,
             name: prod.productName,
             description: prod.productDescription,
             unit: prod.productUnit,
-            purchaseCount: prod.purchaseCount,
-            totalQuantityPurchased: prod.totalQuantityPurchased,
-            price: prod.unitPrice,
-            // Add more fields here if your frontend needs them
+            price: parseFloat(prod.unitPrice) || 0,
+            availableStock: parseInt(prod.totalQuantityPurchased, 10) || 0,
+            initialStockForSession:
+              parseInt(prod.totalQuantityPurchased, 10) || 0,
+            category: prod.productCategoryId || null, // Assuming API provides productCategoryId
           }));
 
-          // Commit the formatted product list to the store
           commit("SET_ALL_PRODUCTS_LIST", formattedProducts);
-          commit("SET_DISPLAYED_PRODUCTS", formattedProducts);
+          commit("RECONCILE_STOCK_WITH_CART"); // This will also update displayedProducts
         } else {
-          // Handle API error or missing data
           console.error(
             "Failed to fetch all products:",
             response.data?.message
@@ -186,29 +284,49 @@ export default createStore({
           commit("SET_DISPLAYED_PRODUCTS", []);
         }
       } catch (error) {
-        // Handle network or unexpected errors
         console.error("API error fetching all products:", error);
         commit("SET_ALL_PRODUCTS_LIST", []);
         commit("SET_DISPLAYED_PRODUCTS", []);
       } finally {
-        // Always reset loading state
         commit("SET_PRODUCT_LOADING", false);
       }
     },
-    async fetchProductsByCategory({ commit }, categoryId) {
+    async fetchProductsByCategory({ commit, state }, categoryId) {
+      // 'state' is used here, removed unused 'dispatch'
+      if (state.allProductsList.length > 0) {
+        commit("SET_PRODUCT_LOADING", true);
+        const filteredProducts =
+          categoryId && String(categoryId) !== "all" // Assuming "all" might be a value for showing all
+            ? state.allProductsList.filter(
+                (p) => String(p.category) === String(categoryId)
+              )
+            : JSON.parse(JSON.stringify(state.allProductsList));
+
+        commit(
+          "SET_DISPLAYED_PRODUCTS",
+          JSON.parse(JSON.stringify(filteredProducts))
+        );
+        commit("SET_PRODUCT_LOADING", false);
+        return;
+      }
+
+      // Fallback to API call if allProductsList is empty:
+      // This path is less ideal for consistent stock if this API doesn't provide 'initialStockForSession'
+      // or if allProductsList is the main source of truth for stock.
       if (!categoryId) {
-        console.warn("fetchProductsByCategory called without categoryId.");
-        // Option: Revert to showing all products or clear
-        // commit('SET_DISPLAYED_PRODUCTS', this.state.allProductsList); // Assuming 'this' context if not arrow fn
+        console.warn(
+          "fetchProductsByCategory called without categoryId and no allProductsList loaded."
+        );
         commit("CLEAR_DISPLAYED_PRODUCTS");
         return;
       }
+
       commit("CLEAR_DISPLAYED_PRODUCTS");
       commit("SET_PRODUCT_LOADING", true);
       try {
         const token = sessionStorage.getItem("posToken");
         const response = await axios.post(
-          "http://demo.app.kenwynbooks.com/api/pos/products/get-all-product-categories-via-catagories.php", // Your new endpoint
+          "http://demo.app.kenwynbooks.com/api/pos/products/get-all-product-categories-via-catagories.php",
           { categoryId: String(categoryId) },
           {
             headers: {
@@ -224,10 +342,17 @@ export default createStore({
             name: prod.name,
             price: parseFloat(prod.salesPrice) || 0,
             category: prod.categoryId,
-            imageName: prod.imageName, // Original imageName from API
-            imagePath: prod.imagePath, // Full imagePath from API (backend should be providing this)
+            imageName: prod.imageName,
+            imagePath: prod.imagePath,
+            availableStock: parseInt(prod.stockFromCategoryApi, 10) || 0, // API MUST PROVIDE THIS
+            initialStockForSession:
+              parseInt(prod.stockFromCategoryApi, 10) || 0, // API MUST PROVIDE THIS
           }));
           commit("SET_DISPLAYED_PRODUCTS", formattedProducts);
+          // If this list is independent, it needs its own reconciliation if cart exists
+          // For now, assuming it should ideally come from allProductsList for consistency.
+          // If you must reconcile this independent list:
+          // commit("RECONCILE_STOCK_FOR_DISPLAYED_PRODUCTS_ONLY"); // would be a new specific mutation
         } else {
           console.error(
             `Failed to fetch products for category ${categoryId}:`,

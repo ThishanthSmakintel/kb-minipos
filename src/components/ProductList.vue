@@ -47,7 +47,7 @@
             <p
               class="card-text text-secondary fw-semibold fs-6 mb-0 product-stock"
             >
-              Available Stock: {{ product.totalQuantityPurchased }}
+              Available Stock: {{ product.availableStock }}
             </p>
           </div>
         </div>
