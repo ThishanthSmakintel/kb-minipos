@@ -5,8 +5,8 @@ export default createStore({
   state() {
     return {
       amount: 0,
-      allProductsList: [], // Holds ALL products fetched initially
-      displayedProducts: [], // Holds products to be displayed (all, or by category)
+      allProductsList: [],
+      displayedProducts: [],
       categories: [],
       cart: [],
       isProductLoading: false,
@@ -31,6 +31,8 @@ export default createStore({
           name: productToAdd.name,
           price: parseFloat(productToAdd.price),
           quantity: 1,
+          // You might want to add imagePath here if needed directly in cart item
+          // imagePath: productToAdd.imagePath
         });
       }
     },
@@ -59,11 +61,9 @@ export default createStore({
       state.categories = categoriesData;
     },
     SET_ALL_PRODUCTS_LIST(state, productsData) {
-      // For all products
       state.allProductsList = productsData;
     },
     SET_DISPLAYED_PRODUCTS(state, productsData) {
-      // For displayed products
       state.displayedProducts = productsData;
     },
     CLEAR_DISPLAYED_PRODUCTS(state) {
@@ -107,7 +107,7 @@ export default createStore({
       dispatch("saveCartToLocalStorage");
     },
     async fetchCategories({ commit }) {
-      commit("SET_PRODUCT_LOADING", true);
+      commit("SET_PRODUCT_LOADING", true); // Or a specific category loading flag
       try {
         const token = sessionStorage.getItem("posToken");
         const response = await axios.post(
@@ -115,7 +115,7 @@ export default createStore({
           {},
           {
             headers: {
-              /* Your Headers */ Authorization: `Bearer ${token}`,
+              Authorization: `Bearer ${token}`,
               "Api-Key": "kenwynaccounting.com",
               "Content-Type": "application/json",
             },
@@ -135,23 +135,19 @@ export default createStore({
       } catch (error) {
         console.error("API error in fetchCategories:", error);
         commit("SET_CATEGORIES", []);
-      } finally {
-        // Do not set product loading false here, let product fetching do it
       }
+      // SET_PRODUCT_LOADING will be set to false by product fetching actions
     },
-    // Action to fetch ALL products (for initial load)
     async fetchAllProducts({ commit }) {
       commit("SET_PRODUCT_LOADING", true);
       try {
         const token = sessionStorage.getItem("posToken");
-        // Use your endpoint that returns ALL products
-        // Assuming get-all-products.php without categoryId returns all
         const response = await axios.post(
-          "http://demo.app.kenwynbooks.com/api/pos/products/get-all-products.php",
-          {}, // Empty body for all products, or adjust if API needs a specific flag
+          "http://demo.app.kenwynbooks.com/api/pos/products/get-all-products.php", // Endpoint for ALL products
+          {},
           {
             headers: {
-              /* Your Headers */ Authorization: `Bearer ${token}`,
+              Authorization: `Bearer ${token}`,
               "Api-Key": "kenwynaccounting.com",
               "Content-Type": "application/json",
             },
@@ -163,11 +159,14 @@ export default createStore({
             name: prod.name,
             price: parseFloat(prod.salesPrice) || 0,
             category: prod.categoryId,
-            imageName: prod.imageName, // From your API structure
-            imagePath: prod.imagePath, // From your API structure (if backend adds it)
+            imageName: prod.imageName, // Original imageName from API
+            imagePath: prod.imagePath, // Full imagePath from API (if backend adds it)
+            // If backend doesn't add imagePath, you might construct it here
+            // based on prod.imageName and a BASE_URL if needed.
+            // But your PHP now adds it, so this should be correct.
           }));
           commit("SET_ALL_PRODUCTS_LIST", formattedProducts);
-          commit("SET_DISPLAYED_PRODUCTS", formattedProducts); // Initially display all
+          commit("SET_DISPLAYED_PRODUCTS", formattedProducts);
         } else {
           console.error(
             "Failed to fetch all products:",
@@ -184,32 +183,24 @@ export default createStore({
         commit("SET_PRODUCT_LOADING", false);
       }
     },
-    // Action to fetch products BY CATEGORY using the new endpoint
     async fetchProductsByCategory({ commit }, categoryId) {
       if (!categoryId) {
-        // If no categoryId, show all products from the initially fetched list
-        // This case might be handled in component by calling fetchAllProducts or setting displayed = all
-        // For now, let's assume categoryId will always be present when this action is called for filtering
-        console.warn(
-          "fetchProductsByCategory called without categoryId. Action not run."
-        );
-        // commit('SET_DISPLAYED_PRODUCTS', state.allProductsList); // Option: revert to all products
+        console.warn("fetchProductsByCategory called without categoryId.");
+        // Option: Revert to showing all products or clear
+        // commit('SET_DISPLAYED_PRODUCTS', this.state.allProductsList); // Assuming 'this' context if not arrow fn
+        commit("CLEAR_DISPLAYED_PRODUCTS");
         return;
       }
       commit("CLEAR_DISPLAYED_PRODUCTS");
       commit("SET_PRODUCT_LOADING", true);
-      console.log(
-        `Fetching products for category ID: ${categoryId} using new endpoint`
-      );
       try {
         const token = sessionStorage.getItem("posToken");
         const response = await axios.post(
-          // YOUR NEW ENDPOINT HERE
-          "http://demo.app.kenwynbooks.com/api/pos/products/get-all-product-categories-via-catagories.php",
-          { categoryId: String(categoryId) }, // Send categoryId, ensure it's a string if API expects
+          "http://demo.app.kenwynbooks.com/api/pos/products/get-all-product-categories-via-catagories.php", // Your new endpoint
+          { categoryId: String(categoryId) },
           {
             headers: {
-              /* Your Headers */ Authorization: `Bearer ${token}`,
+              Authorization: `Bearer ${token}`,
               "Api-Key": "kenwynaccounting.com",
               "Content-Type": "application/json",
             },
@@ -221,8 +212,8 @@ export default createStore({
             name: prod.name,
             price: parseFloat(prod.salesPrice) || 0,
             category: prod.categoryId,
-            imageName: prod.imageName,
-            imagePath: prod.imagePath,
+            imageName: prod.imageName, // Original imageName from API
+            imagePath: prod.imagePath, // Full imagePath from API (backend should be providing this)
           }));
           commit("SET_DISPLAYED_PRODUCTS", formattedProducts);
         } else {
@@ -245,8 +236,7 @@ export default createStore({
   },
   getters: {
     getAmount: (state) => state.amount,
-    // allProducts: (state) => state.allProductsList, // Getter for the complete list
-    displayedProducts: (state) => state.displayedProducts, // Getter for products to show
+    displayedProducts: (state) => state.displayedProducts,
     allCategories: (state) => state.categories,
     cartItems: (state) => state.cart,
     cartItemCount: (state) => {
