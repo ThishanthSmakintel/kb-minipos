@@ -18,17 +18,6 @@
           class="text-muted me-2"
           >Loading categories...</span
         >
-        <button
-          v-for="cat in vuexCategories"
-          :key="cat.key"
-          @click="selectCategory(cat.key)"
-          class="btn me-2 text-nowrap"
-          :class="
-            selectedCategory === cat.key ? 'btn-primary' : 'btn-outline-primary'
-          "
-        >
-          {{ cat.name }}
-        </button>
       </div>
       <div class="actions d-flex align-items-center">
         <button
@@ -160,22 +149,20 @@ export default {
   },
   data() {
     return {
-      selectedCategory: null, // No category selected initially
+      selectedCategory: null, // No category selected initially, and UI for selection is disabled
       isLoggedIn: false,
       isInitialLoading: true,
     };
   },
   computed: {
     ...mapState({
-      // vuexProducts no longer mapped directly for display, use getter
       vuexCategories: (state) => state.categories,
-      // We'll use a getter for displayed products
     }),
     ...mapGetters({
       vuexCartItems: "cartItems",
       vuexCartItemCount: "cartItemCount",
       getCategoryNameFromStore: "getCategoryNameByKey",
-      vuexDisplayedProducts: "displayedProducts", // Use the new getter
+      vuexDisplayedProducts: "displayedProducts",
       vuexIsProductLoading: "isProductLoading",
     }),
     categoryNameFromVuex() {
@@ -189,9 +176,9 @@ export default {
       "updateCartItemQuantity",
       "removeItemFromCart",
       "clearCart",
-      "fetchCategories",
-      "fetchAllProducts", // Action to get all products
-      "fetchProductsByCategory", // Action to get products by category
+      "fetchCategories", // Kept for potential future use or if category data is used elsewhere
+      "fetchAllProducts",
+      // "fetchProductsByCategory", // Commented out as category filtering is not active
     ]),
     checkLoginStatus() {
       this.isLoggedIn =
@@ -201,23 +188,23 @@ export default {
     navigateToLogin() {
       this.$router.push({ name: "Login" });
     },
+    /* // Method for selecting a category, currently not used as UI is disabled
     async selectCategory(categoryKey) {
       console.log("Category selected with key:", categoryKey);
       this.selectedCategory = categoryKey;
       if (categoryKey) {
-        await this.fetchProductsByCategory(categoryKey);
+        // await this.fetchProductsByCategory(categoryKey); // Call to action also disabled
       }
     },
+    */
     selectAllProducts() {
-      console.log("All Products selected");
-      this.selectedCategory = null; // No specific category is selected
-      // We need to tell Vuex to set displayedProducts to allProductsList
+      // console.log("All Products selected"); // Optional: remove console.log for production
+      this.selectedCategory = null;
       this.$store.commit(
         "SET_DISPLAYED_PRODUCTS",
         this.$store.state.allProductsList
       );
     },
-    // ... (other methods remain the same)
     scrollToCartOnMobile() {
       if (window.innerWidth < 768) {
         const cartElement = document.getElementById("shopping-cart-area");
@@ -314,9 +301,11 @@ export default {
     async initializePOSData() {
       this.isInitialLoading = true;
       try {
-        await this.fetchCategories(); // Fetch categories first
-        await this.fetchAllProducts(); // Then fetch all products to show by default
-        // No category is pre-selected, selectedCategory remains null
+        // Fetching categories in case they are needed for display or future re-enablement of filtering
+        await this.fetchCategories();
+        // Fetch all products to display by default. This now uses the adjusted Vuex action.
+        await this.fetchAllProducts();
+        // selectedCategory remains null, ensuring "All Products" are shown.
       } catch (error) {
         console.error("Error initializing POS data:", error);
       } finally {

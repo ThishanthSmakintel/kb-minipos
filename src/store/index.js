@@ -141,10 +141,15 @@ export default createStore({
     async fetchAllProducts({ commit }) {
       commit("SET_PRODUCT_LOADING", true);
       try {
+        // Retrieve token from session storage
         const token = sessionStorage.getItem("posToken");
+
+        // Make API call to fetch products
         const response = await axios.post(
-          "http://demo.app.kenwynbooks.com/api/pos/products/get-all-products.php", // Endpoint for ALL products
-          {},
+          "http://demo.app.kenwynbooks.com/api/pos/products/get-all-products-stock-details.php",
+          {
+            customerId: "206",
+          },
           {
             headers: {
               Authorization: `Bearer ${token}`,
@@ -153,21 +158,26 @@ export default createStore({
             },
           }
         );
-        if (response.data?.code === 200 && response.data?.data) {
-          const formattedProducts = response.data.data.map((prod) => ({
-            id: prod.id,
-            name: prod.name,
-            price: parseFloat(prod.salesPrice) || 0,
-            category: prod.categoryId,
-            imageName: prod.imageName, // Original imageName from API
-            imagePath: prod.imagePath, // Full imagePath from API (if backend adds it)
-            // If backend doesn't add imagePath, you might construct it here
-            // based on prod.imageName and a BASE_URL if needed.
-            // But your PHP now adds it, so this should be correct.
+
+        // Check for successful response and presence of products array
+        if (response.data?.code === 200 && response.data?.data?.products) {
+          // Map API fields to frontend product fields
+          const formattedProducts = response.data.data.products.map((prod) => ({
+            id: prod.productId,
+            name: prod.productName,
+            description: prod.productDescription,
+            unit: prod.productUnit,
+            purchaseCount: prod.purchaseCount,
+            totalQuantityPurchased: prod.totalQuantityPurchased,
+            price: prod.unitPrice,
+            // Add more fields here if your frontend needs them
           }));
+
+          // Commit the formatted product list to the store
           commit("SET_ALL_PRODUCTS_LIST", formattedProducts);
           commit("SET_DISPLAYED_PRODUCTS", formattedProducts);
         } else {
+          // Handle API error or missing data
           console.error(
             "Failed to fetch all products:",
             response.data?.message
@@ -176,10 +186,12 @@ export default createStore({
           commit("SET_DISPLAYED_PRODUCTS", []);
         }
       } catch (error) {
+        // Handle network or unexpected errors
         console.error("API error fetching all products:", error);
         commit("SET_ALL_PRODUCTS_LIST", []);
         commit("SET_DISPLAYED_PRODUCTS", []);
       } finally {
+        // Always reset loading state
         commit("SET_PRODUCT_LOADING", false);
       }
     },

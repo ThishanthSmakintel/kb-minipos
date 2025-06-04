@@ -5,7 +5,7 @@
     <div class="payment-box text-center shadow p-4 p-md-5 bg-white rounded">
       <h2 class="mb-3 text-dark">Complete Payment</h2>
       <p class="text-secondary mb-4 fs-4">
-        <strong>Total Amount:</strong> ${{ amountFromStore.toFixed(2) }}
+        <strong>Total Amount:</strong> ${{ amountFromStore }}
       </p>
 
       <div class="d-grid gap-2 d-sm-flex justify-content-sm-center mb-4">

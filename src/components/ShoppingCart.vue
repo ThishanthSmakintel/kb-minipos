@@ -16,9 +16,7 @@
         >
           <div>
             <h6 class="my-0">{{ item.name }}</h6>
-            <small class="text-muted"
-              >Price: ${{ item.price.toFixed(2) }}</small
-            >
+            <small class="text-muted">Price: ${{ item.price }}</small>
           </div>
           <div class="d-flex align-items-center">
             <button
