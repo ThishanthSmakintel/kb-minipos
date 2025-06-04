@@ -5,7 +5,21 @@
     >
       <div class="categories mb-2 mb-md-0">
         <button
-          v-for="cat in categories"
+          @click="selectAllProducts"
+          class="btn me-2 text-nowrap"
+          :class="!selectedCategory ? 'btn-primary' : 'btn-outline-primary'"
+        >
+          All Products
+        </button>
+        <span
+          v-if="
+            isInitialLoading && (!vuexCategories || vuexCategories.length === 0)
+          "
+          class="text-muted me-2"
+          >Loading categories...</span
+        >
+        <button
+          v-for="cat in vuexCategories"
           :key="cat.key"
           @click="selectCategory(cat.key)"
           class="btn me-2 text-nowrap"
@@ -36,7 +50,7 @@
           class="btn btn-outline-secondary text-nowrap"
           id="cart-summary-button"
         >
-          Cart ({{ cartItemCount }})
+          Cart ({{ vuexCartItemCount }})
         </button>
       </div>
     </div>
@@ -47,21 +61,71 @@
         id="product-list-area"
       >
         <h2
-          v-if="selectedCategory && getCategoryName(selectedCategory)"
+          v-if="selectedCategory && categoryNameFromVuex(selectedCategory)"
           class="mb-3 h5 sticky-top bg-light py-2 d-md-none"
         >
-          {{ getCategoryName(selectedCategory) }}
+          {{ categoryNameFromVuex(selectedCategory) }}
         </h2>
         <h2
-          v-if="selectedCategory && getCategoryName(selectedCategory)"
+          v-else-if="!selectedCategory && !isInitialLoading"
+          class="mb-3 h5 sticky-top bg-light py-2 d-md-none"
+        >
+          All Products
+        </h2>
+        <h2
+          v-else-if="isInitialLoading || vuexIsProductLoading"
+          class="mb-3 h5 sticky-top bg-light py-2 d-md-none"
+        >
+          Loading...
+        </h2>
+
+        <h2
+          v-if="selectedCategory && categoryNameFromVuex(selectedCategory)"
           class="mb-3 h5 d-none d-md-block"
         >
-          Products in {{ getCategoryName(selectedCategory) }}
+          Products in {{ categoryNameFromVuex(selectedCategory) }}
         </h2>
+        <h2
+          v-else-if="!selectedCategory && !isInitialLoading"
+          class="mb-3 h5 d-none d-md-block"
+        >
+          All Products
+        </h2>
+        <h2
+          v-else-if="isInitialLoading || vuexIsProductLoading"
+          class="mb-3 h5 d-none d-md-block"
+        >
+          Loading...
+        </h2>
+
         <ProductList
-          :products="filteredProducts"
+          v-if="!vuexIsProductLoading"
+          :products="vuexDisplayedProducts"
           @add-to-cart="handleAddToCart"
         />
+        <div v-if="vuexIsProductLoading" class="text-center text-muted mt-4">
+          <p>Loading products...</p>
+        </div>
+        <div
+          v-if="
+            !isInitialLoading &&
+            !vuexIsProductLoading &&
+            selectedCategory &&
+            vuexDisplayedProducts.length === 0
+          "
+          class="text-center text-muted mt-4"
+        ></div>
+        <div
+          v-if="
+            !isInitialLoading &&
+            !vuexIsProductLoading &&
+            !selectedCategory &&
+            vuexDisplayedProducts.length === 0
+          "
+          class="text-center text-muted mt-4"
+        >
+          <p>No products found.</p>
+        </div>
       </div>
 
       <div
@@ -71,7 +135,7 @@
         <div class="sticky-top cart-sticky-container pt-md-0">
           <h2 class="mb-3 h5">Your Shopping Cart</h2>
           <ShoppingCart
-            :cart-items="cart"
+            :cart-items="vuexCartItems"
             @update-quantity="handleUpdateQuantity"
             @remove-item="handleRemoveItem"
             @checkout="handleCheckout"
@@ -86,7 +150,7 @@
 import ProductList from "./ProductList.vue";
 import ShoppingCart from "./ShoppingCart.vue";
 import Swal from "sweetalert2";
-// import { useStore } from "vuex"; // Not needed if using this.$store
+import { mapState, mapGetters, mapActions } from "vuex";
 
 export default {
   name: "PosSystem",
@@ -96,56 +160,39 @@ export default {
   },
   data() {
     return {
-      products: [
-        // Keep your product data here
-        {
-          id: "R001",
-          name: "Spring Roll (Veg)",
-          price: 2.5,
-          category: "Rolls",
-        },
-        {
-          id: "R002",
-          name: "Chicken Sausage Roll",
-          price: 3.0,
-          category: "Rolls",
-        },
-        { id: "D001", name: "Cola (300ml)", price: 1.5, category: "Drinks" },
-        {
-          id: "F001",
-          name: "Organic Apples (1kg)",
-          price: 4.99,
-          category: "Food",
-        },
-      ],
-      cart: [],
-      categories: [
-        { key: "Rolls", name: "Rolls" },
-        { key: "Drinks", name: "Drinks" },
-        { key: "Food", name: "Food & Groceries" },
-      ],
-      selectedCategory: "Rolls",
+      selectedCategory: null, // No category selected initially
       isLoggedIn: false,
+      isInitialLoading: true,
     };
   },
   computed: {
-    filteredProducts() {
-      if (!this.selectedCategory) return this.products;
-      return this.products.filter(
-        (product) => product.category === this.selectedCategory
-      );
-    },
-    cartItemCount() {
-      return this.cart.reduce((total, item) => total + item.quantity, 0);
-    },
-    getCategoryName() {
-      return (categoryKey) => {
-        const category = this.categories.find((c) => c.key === categoryKey);
-        return category ? category.name : "";
-      };
+    ...mapState({
+      // vuexProducts no longer mapped directly for display, use getter
+      vuexCategories: (state) => state.categories,
+      // We'll use a getter for displayed products
+    }),
+    ...mapGetters({
+      vuexCartItems: "cartItems",
+      vuexCartItemCount: "cartItemCount",
+      getCategoryNameFromStore: "getCategoryNameByKey",
+      vuexDisplayedProducts: "displayedProducts", // Use the new getter
+      vuexIsProductLoading: "isProductLoading",
+    }),
+    categoryNameFromVuex() {
+      return (categoryKey) => this.getCategoryNameFromStore(categoryKey);
     },
   },
   methods: {
+    ...mapActions([
+      "loadCartFromLocalStorage",
+      "addItemToCart",
+      "updateCartItemQuantity",
+      "removeItemFromCart",
+      "clearCart",
+      "fetchCategories",
+      "fetchAllProducts", // Action to get all products
+      "fetchProductsByCategory", // Action to get products by category
+    ]),
     checkLoginStatus() {
       this.isLoggedIn =
         !!sessionStorage.getItem("isLoggedInPos") ||
@@ -154,9 +201,23 @@ export default {
     navigateToLogin() {
       this.$router.push({ name: "Login" });
     },
-    selectCategory(categoryKey) {
+    async selectCategory(categoryKey) {
+      console.log("Category selected with key:", categoryKey);
       this.selectedCategory = categoryKey;
+      if (categoryKey) {
+        await this.fetchProductsByCategory(categoryKey);
+      }
     },
+    selectAllProducts() {
+      console.log("All Products selected");
+      this.selectedCategory = null; // No specific category is selected
+      // We need to tell Vuex to set displayedProducts to allProductsList
+      this.$store.commit(
+        "SET_DISPLAYED_PRODUCTS",
+        this.$store.state.allProductsList
+      );
+    },
+    // ... (other methods remain the same)
     scrollToCartOnMobile() {
       if (window.innerWidth < 768) {
         const cartElement = document.getElementById("shopping-cart-area");
@@ -166,34 +227,13 @@ export default {
       }
     },
     handleAddToCart(productToAdd) {
-      const existingItem = this.cart.find(
-        (item) => item.productId === productToAdd.id
-      );
-      if (existingItem) {
-        existingItem.quantity++;
-      } else {
-        this.cart.push({
-          productId: productToAdd.id,
-          name: productToAdd.name,
-          price: productToAdd.price,
-          quantity: 1,
-        });
-      }
-      this.saveCartToLocalStorage();
+      this.addItemToCart(productToAdd);
     },
     handleUpdateQuantity({ productId, change }) {
-      const itemInCart = this.cart.find((item) => item.productId === productId);
-      if (itemInCart) {
-        itemInCart.quantity += change;
-        if (itemInCart.quantity <= 0) {
-          this.actuallyRemoveItem(productId, false);
-        } else {
-          this.saveCartToLocalStorage();
-        }
-      }
+      this.updateCartItemQuantity({ productId, change });
     },
     handleRemoveItem(productIdToRemove) {
-      const itemToRemove = this.cart.find(
+      const itemToRemove = this.vuexCartItems.find(
         (item) => item.productId === productIdToRemove
       );
       if (itemToRemove) {
@@ -205,15 +245,17 @@ export default {
           confirmButtonText: "Yes, remove!",
           cancelButtonText: "No",
         }).then((result) => {
-          if (result.isConfirmed)
+          if (result.isConfirmed) {
             this.actuallyRemoveItem(productIdToRemove, true);
+          }
         });
       }
     },
     actuallyRemoveItem(productIdToRemove, showSwal) {
-      const item = this.cart.find((i) => i.productId === productIdToRemove);
-      this.cart = this.cart.filter((i) => i.productId !== productIdToRemove);
-      this.saveCartToLocalStorage();
+      const item = this.vuexCartItems.find(
+        (i) => i.productId === productIdToRemove
+      );
+      this.removeItemFromCart(productIdToRemove);
       if (showSwal && item) {
         Swal.fire("Removed!", `${item.name} removed.`, "success", {
           timer: 1500,
@@ -222,28 +264,15 @@ export default {
       }
     },
     handleCheckout(totalAmount) {
-      if (this.cart.length === 0) {
+      if (this.vuexCartItems.length === 0) {
         Swal.fire("Cart Empty", "Add products before checkout.", "warning");
         return;
       }
-
       this.$store.dispatch("updateAmount", totalAmount);
       this.$router.push({ name: "CheckoutPayment" });
     },
-    saveCartToLocalStorage() {
-      localStorage.setItem("miniPosCart", JSON.stringify(this.cart));
-    },
-    loadCartFromLocalStorage() {
-      const savedCart = localStorage.getItem("miniPosCart");
-      if (savedCart) this.cart = JSON.parse(savedCart);
-    },
-    clearCartOnly() {
-      this.cart = [];
-      this.saveCartToLocalStorage();
-      this.$store.dispatch("clearAmount"); // Also clear amount in Vuex
-    },
     clearCartWithConfirmation() {
-      if (this.cart.length === 0) {
+      if (this.vuexCartItems.length === 0) {
         Swal.fire("Cart Empty", "Your cart is already empty.", "info");
         return;
       }
@@ -256,7 +285,7 @@ export default {
         cancelButtonText: "No",
       }).then((result) => {
         if (result.isConfirmed) {
-          this.clearCartOnly();
+          this.clearCart();
           Swal.fire("Cleared!", "Cart has been cleared.", "success");
         }
       });
@@ -264,7 +293,7 @@ export default {
     checkAndProcessPaymentStatus() {
       const status = this.$route.query.payment_status;
       if (status === "success") {
-        this.clearCartOnly(); // This will also clear Vuex amount
+        this.clearCart();
         Swal.fire(
           "Payment Successful!",
           "Order complete, cart cleared.",
@@ -282,10 +311,23 @@ export default {
       delete newQuery.payment_status;
       this.$router.replace({ query: newQuery }).catch(() => {});
     },
+    async initializePOSData() {
+      this.isInitialLoading = true;
+      try {
+        await this.fetchCategories(); // Fetch categories first
+        await this.fetchAllProducts(); // Then fetch all products to show by default
+        // No category is pre-selected, selectedCategory remains null
+      } catch (error) {
+        console.error("Error initializing POS data:", error);
+      } finally {
+        this.isInitialLoading = false;
+      }
+    },
   },
   created() {
     this.loadCartFromLocalStorage();
     this.checkLoginStatus();
+    this.initializePOSData();
   },
   mounted() {
     this.checkAndProcessPaymentStatus();
@@ -299,6 +341,7 @@ export default {
 </script>
 
 <style scoped>
+/* ... your styles ... */
 .pos-header button {
   min-width: 110px;
 }
