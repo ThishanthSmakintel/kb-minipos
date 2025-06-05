@@ -66,7 +66,7 @@ export default {
       this.isLoading = true;
 
       try {
-        const outletId = 205;
+        const outletId = 206;
 
         const response = await axios.post(
           "http://demo.app.kenwynbooks.com/api/pos/auth/login.php",
@@ -90,6 +90,10 @@ export default {
           sessionStorage.setItem(
             "posUserData",
             JSON.stringify(response.data.userData)
+          );
+          sessionStorage.setItem(
+            "currentOutlet",
+            JSON.stringify(response.data.currentOutlet)
           );
           sessionStorage.setItem(
             "posSessionContext",
